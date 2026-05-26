@@ -37,17 +37,17 @@ class VC:
         self.config = Config()
 
     def get_vc(self, sid: str | Path, *to_return_protect: int):
-        logger.info("Get sid: " + os.path.basename(sid) if hasattr(sid, "name") or isinstance(sid, str) else "ERROR")
+        if isinstance(sid, Path):
+            sid = str(sid.expanduser().resolve())
+        elif not isinstance(sid, str):
+            raise RuntimeError(f"pathlib.Path or str expected for sid. Got {type(sid)}")
+
+        logger.info("Get sid: " + os.path.basename(sid))
 
         return_protect = [
             to_return_protect[0] if self.if_f0 != 0 and to_return_protect else 0.5,
             to_return_protect[1] if self.if_f0 != 0 and to_return_protect else 0.33,
         ]
-
-        if hasattr(sid, "name"):
-            sid = sid.name
-        elif not isinstance(sid, str):
-            raise RuntimeError(f"pathlib.Path or str expected for sid. Got {type(sid)}")
 
         weight_root = os.getenv("weight_root")
         person = sid if os.path.exists(sid) else f'{weight_root if weight_root is not None else "."}/{sid}'
@@ -111,33 +111,37 @@ class VC:
     ):
         if hubert_path is None:
             hubert_path = os.getenv("hubert_path")
-        elif hasattr(hubert_path, "name"):
-            hubert_path = hubert_path.name
+        elif isinstance(hubert_path, Path):
+            hubert_path = str(hubert_path.expanduser().resolve())
         elif not isinstance(hubert_path, str):
             raise RuntimeError(f"pathlib.Path, str, or None expected for hubert_path. Got {type(hubert_path)}")
-        
+
         if hubert_path is None or not os.path.exists(hubert_path):
             raise FileNotFoundError("hubert_path not found.")
 
-        if hasattr(input_audio_path, "name"):
-            input_audio_path = input_audio_path.name
+        if isinstance(input_audio_path, Path):
+            input_audio_path = str(input_audio_path.expanduser().resolve())
         elif not isinstance(input_audio_path, str):
             raise RuntimeError(f"pathlib.Path or str expected for input_audio_path. Got {type(input_audio_path)}")
-        
+
         if not os.path.exists(input_audio_path):
             raise FileNotFoundError("input_audio_path not found.")
-        
+
         if isinstance(f0_file, str):
             f0_file = Path(f0_file)
         elif not isinstance(f0_file, Path) and f0_file is not None:
             raise RuntimeError(f"pathlib.Path, str, or None expected for f0_file. Got {type(f0_file)}")
-        
-        if hasattr(f0_file, "name") and not os.path.exists(f0_file.name):
-            logger.warning("f0_file not found. Will use None instead.")
-            f0_file = None
-        
-        if hasattr(index_file, "name"):
-            index_file = index_file.name
+
+        if f0_file is not None and isinstance(f0_file, Path):
+            f0_resolved = str(f0_file.expanduser().resolve())
+            if not os.path.exists(f0_resolved):
+                logger.warning("f0_file not found. Will use None instead.")
+                f0_file = None
+            else:
+                f0_file = Path(f0_resolved)
+
+        if isinstance(index_file, Path):
+            index_file = str(index_file.expanduser().resolve())
         elif not isinstance(index_file, str) and index_file is not None:
             raise RuntimeError(f"pathlib.Path, str, or None expected for index_file. Got {type(index_file)}")
         
@@ -202,12 +206,17 @@ class VC:
         output_format: str = "wav",
         hubert_path: str | Path | None = None,
     ):
-        if hasattr(opt_root, "name"):
-            opt_root = opt_root.name
+        if isinstance(opt_root, Path):
+            opt_root = str(opt_root.expanduser().resolve())
+        elif not isinstance(opt_root, str):
+            raise RuntimeError(f"pathlib.Path or str expected for opt_root. Got {type(opt_root)}")
 
         try:
             os.makedirs(opt_root, exist_ok=True)
-            paths = [path.name if hasattr(path, "name") else path for path in paths]
+            paths = [
+                str(p.expanduser().resolve()) if isinstance(p, Path) else p
+                for p in paths
+            ]
             infos = []
             for path in paths:
                 tgt_sr, audio_opt, _, info = self.vc_inference(
