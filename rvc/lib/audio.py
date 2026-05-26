@@ -1,6 +1,5 @@
 import os
 import traceback
-from io import BytesIO
 
 import av
 import librosa
@@ -8,10 +7,11 @@ import numpy as np
 
 
 def wav2(i, o, format):
-    inp = av.open(i, "rb")
+    # PyAV>=12 expects mode "r" / "w" (not "rb" / "wb").
+    inp = av.open(i, "r")
     if format == "m4a":
         format = "mp4"
-    out = av.open(o, "wb", format=format)
+    out = av.open(o, "w", format=format)
     if format == "ogg":
         format = "libvorbis"
     if format == "mp4":
@@ -31,8 +31,8 @@ def wav2(i, o, format):
 
 
 def audio2(i, o, format, sr):
-    inp = av.open(i, "rb")
-    out = av.open(o, "wb", format=format)
+    inp = av.open(i, "r")
+    out = av.open(o, "w", format=format)
     if format == "ogg":
         format = "libvorbis"
     if format == "f32le":
@@ -50,21 +50,20 @@ def audio2(i, o, format, sr):
 
 
 def load_audio(file, sr):
+    """Decode to mono float32 at ``sr``.
+
+    Older implementation round-tripped through PyAV into a raw PCM BytesIO buffer. That path
+    bitrots on newer PyAV (modes, ``channels`` on ``add_stream``) and mishandled failures via an
+    ``except AttributeError`` branch that assumed ``file`` was a ``(native_sr, samples)`` tuple.
+    ``librosa.load`` matches VC inference needs and stays compatible across PyAV versions.
+    """
     if not os.path.exists(file):
         raise RuntimeError(
             "You input a wrong audio path that does not exists, please fix it!"
         )
     try:
-        with open(file, "rb") as f:
-            with BytesIO() as out:
-                audio2(f, out, "f32le", sr)
-                return np.frombuffer(out.getvalue(), np.float32).flatten()
-
-    except AttributeError:
-        audio = file[1] / 32768.0
-        if len(audio.shape) == 2:
-            audio = np.mean(audio, -1)
-        return librosa.resample(audio, orig_sr=file[0], target_sr=16000)
+        audio, _ = librosa.load(str(file), sr=sr, mono=True)
+        return np.asarray(audio, dtype=np.float32).flatten()
 
     except Exception:
         raise RuntimeError(traceback.format_exc())
