@@ -2,7 +2,6 @@ import argparse
 import json
 import logging
 import os
-import sys
 from multiprocessing import cpu_count
 
 import torch
@@ -43,13 +42,7 @@ class Config:
         self.json_config = self.load_config_json()
         self.gpu_mem: int | None = None
         self.instead: str | None = None
-        (
-            self.python_cmd,
-            self.listen_port,
-            self.noparallel,
-            self.noautoopen,
-            self.dml,
-        ) = self.arg_parse()
+        self.dml = self.arg_parse()
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
 
     @staticmethod
@@ -60,40 +53,15 @@ class Config:
         }
 
     @staticmethod
-    def arg_parse() -> tuple:
+    def arg_parse() -> bool:
         parser: argparse.ArgumentParser = argparse.ArgumentParser()
-        parser.add_argument("--port", type=int, default=7865, help="Listen port")
-        parser.add_argument(
-            "--pycmd",
-            type=str,
-            default=sys.executable or "python",
-            help="Python command",
-        )
-        parser.add_argument(
-            "--noparallel", action="store_true", help="Disable parallel processing"
-        )
-        parser.add_argument(
-            "--noautoopen",
-            action="store_true",
-            help="Do not open in browser automatically",
-        )
         parser.add_argument(
             "--dml",
             action="store_true",
-            help="torch_dml",
+            help="Use torch-directml for inference on DirectML devices.",
         )
-        cmd_opts: argparse.Namespace
         cmd_opts, _ = parser.parse_known_args()
-
-        cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
-
-        return (
-            cmd_opts.pycmd,
-            cmd_opts.port,
-            cmd_opts.noparallel,
-            cmd_opts.noautoopen,
-            cmd_opts.dml,
-        )
+        return cmd_opts.dml
 
     @staticmethod
     def has_mps() -> bool:
@@ -112,13 +80,11 @@ class Config:
             x_center = 30
             x_max = 32
         elif self.is_half:
-            # 6G PU_RAM conf
             x_pad = 3
             x_query = 10
             x_center = 60
             x_max = 65
         else:
-            # 5G GPU_RAM conf
             x_pad = 1
             x_query = 6
             x_center = 38
